@@ -9,18 +9,10 @@ import {
 import {
   RTCView,
 } from 'react-native-webrtc';
-import io from 'socket.io-client';
-
-import {
-  pcPeers,
-  exchange,
-  leave,
-  getLocalStream,
-} from './rtc-helper';
+import RTCHelper from './RTCHelper';
 
 
-const socket = io.connect('https://react-native-webrtc.herokuapp.com', {transports: ['websocket']});
-
+const rtcSocket = new RTCHelper();
 let localStream;
 
 const mapHash = (hash, func) => {
@@ -48,32 +40,23 @@ class RCTWebRTCDemo extends React.Component{
     };
   }
   componentDidMount(){
-    socket.on('exchange', (data) => {
-      exchange(socket, data);
-    });
-    socket.on('leave', (socketId) => {
-      leave(socketId);
-    });
-    
-    socket.on('connect', (data) => {
-      console.log('connect');
-      getLocalStream(true, (stream) => {
-        localStream = stream;
-        this.setState({selfViewSrc: stream.toURL()});
-        this.setState({status: 'ready', info: 'Please enter or create room ID'});
-      });
-    });
+    rtcSocket.init((stream)=> {
+      localStream = stream;
+      this.setState({selfViewSrc: stream.toURL()});
+      this.setState({status: 'ready', info: 'Please enter or create room ID'});
+    })
   }
   
   press = (event) => {
     this.refs.roomID.blur();
     this.setState({status: 'connect', info: 'Connecting'});
-    join(socket, this.state.roomID);
+    rtcSocket.join(this.state.roomID);
   }
   switchVideoType = () => {
     const isFront = !this.state.isFront;
     this.setState({isFront});
-    getLocalStream(isFront, (stream) => {
+    rtcSocket.getLocalStream(isFront, (stream) => {
+      const pcPeers = rtcSocket.getPcPeers();
       if (localStream) {
         for (const id in pcPeers) {
           const pc = pcPeers[id];
@@ -101,6 +84,7 @@ class RCTWebRTCDemo extends React.Component{
     }
     const textRoomData = this.state.textRoomData.slice();
     textRoomData.push({user: 'Me', message: this.state.textRoomValue});
+    const pcPeers = rtcSocket.getPcPeers();
     for (const key in pcPeers) {
       const pc = pcPeers[key];
       pc.textDataChannel.send(this.state.textRoomValue);
